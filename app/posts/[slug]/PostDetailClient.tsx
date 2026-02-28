@@ -28,12 +28,12 @@ export function PostDetailClient({ post }: PostDetailClientProps) {
     }, [post.contentHtml]);
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-            <div className="flex flex-col lg:flex-row gap-16">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+            <div className="flex flex-col lg:flex-row gap-8 lg:gap-16">
                 {/* Main Content */}
-                <main className="w-full lg:w-4/5">
+                <main className="flex-1 min-w-0">
                     <header className="mb-10 border-b border-border-dark pb-8">
-                        <h1 className="text-3xl md:text-4xl font-bold text-text-white mb-4 leading-tight">
+                        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-text-white mb-4 leading-tight break-words">
                             {post.title}
                         </h1>
                         <div className="flex items-center text-sm text-text-muted space-x-6 font-medium mb-4">
@@ -59,13 +59,13 @@ export function PostDetailClient({ post }: PostDetailClientProps) {
                     </header>
 
                     <article
-                        className="prose-blog max-w-none"
+                        className="prose-blog"
                         dangerouslySetInnerHTML={{ __html: post.contentHtml }}
                     />
                 </main>
 
                 {/* Sidebar - Table of Contents */}
-                <aside className="w-full lg:w-1/5 hidden lg:block">
+                <aside className="w-72 shrink-0 hidden lg:block">
                     <TableOfContents contentHtml={post.contentHtml} />
                 </aside>
             </div>
