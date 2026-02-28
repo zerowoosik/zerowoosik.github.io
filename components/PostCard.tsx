@@ -15,9 +15,18 @@ export function PostCard({ post }: PostCardProps) {
                 <h2 className="text-xl font-bold mb-2 text-text-white group-hover:text-primary transition-colors duration-200">
                     {post.title}
                 </h2>
-                <p className="text-text-muted text-sm leading-relaxed">
-                    {post.description}
-                </p>
+                {post.tags && post.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                        {post.tags.map((tag) => (
+                            <span
+                                key={tag}
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                            >
+                                #{tag}
+                            </span>
+                        ))}
+                    </div>
+                )}
             </article>
         </Link>
     );

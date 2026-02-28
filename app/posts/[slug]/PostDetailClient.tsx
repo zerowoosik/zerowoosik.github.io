@@ -36,12 +36,7 @@ export function PostDetailClient({ post }: PostDetailClientProps) {
                         <h1 className="text-3xl md:text-4xl font-bold text-text-white mb-4 leading-tight">
                             {post.title}
                         </h1>
-                        {post.description && (
-                            <p className="text-lg text-text-muted mb-6">
-                                {post.description}
-                            </p>
-                        )}
-                        <div className="flex items-center text-sm text-text-muted space-x-6 font-medium">
+                        <div className="flex items-center text-sm text-text-muted space-x-6 font-medium mb-4">
                             <span className="flex items-center">
                                 <span className="material-symbols-outlined text-base mr-1.5">
                                     Create
@@ -49,6 +44,18 @@ export function PostDetailClient({ post }: PostDetailClientProps) {
                                 {post.date}
                             </span>
                         </div>
+                        {post.tags && post.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {post.tags.map((tag) => (
+                                    <span
+                                        key={tag}
+                                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20"
+                                    >
+                                        #{tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </header>
 
                     <article

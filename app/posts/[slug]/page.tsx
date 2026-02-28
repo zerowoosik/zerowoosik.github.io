@@ -14,14 +14,27 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
     const { slug } = await params;
     const post = await getPostData(slug);
+    const postUrl = `https://zerowoosik.github.io/posts/${slug}`;
+
     return {
-        title: `${post.title} | zerowoosik's Blog`,
+        title: post.title,
         description: post.description,
+        keywords: post.tags,
         openGraph: {
             title: post.title,
             description: post.description,
+            url: postUrl,
             type: "article",
             publishedTime: post.date,
+            authors: ["zerowoosik"],
+        },
+        twitter: {
+            card: "summary",
+            title: post.title,
+            description: post.description,
+        },
+        alternates: {
+            canonical: postUrl,
         },
     };
 }
