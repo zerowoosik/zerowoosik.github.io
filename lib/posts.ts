@@ -12,7 +12,7 @@ const postsDirectory = path.join(process.cwd(), "posts");
 export interface PostMeta {
     slug: string;
     title: string;
-    date: string;
+    date: Date;
     description: string;
     tags?: string[];
     readingTime: string;

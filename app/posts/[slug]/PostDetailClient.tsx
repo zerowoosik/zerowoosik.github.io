@@ -41,7 +41,7 @@ export function PostDetailClient({ post }: PostDetailClientProps) {
                                 <span className="material-symbols-outlined text-base mr-1.5">
                                     Create
                                 </span>
-                                {post.date}
+                                {post.date.toISOString().slice(0, 10)}
                             </span>
                         </div>
                         {post.tags && post.tags.length > 0 && (
