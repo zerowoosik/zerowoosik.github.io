@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
             description: post.description,
             url: postUrl,
             type: "article",
-            publishedTime: post.date,
+            publishedTime: post.date.toISOString().slice(0, 10),
             authors: ["zerowoosik"],
         },
         twitter: {
