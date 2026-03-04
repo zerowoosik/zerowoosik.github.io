@@ -193,7 +193,7 @@ body {
   font-weight: 600;
 }
 
-.prose-blog code {
+.prose-blog :not(pre)>code {
   color: #eb5757;
   background-color: rgba(235, 87, 87, 0.1);
   padding: 2px 6px;
