@@ -1,0 +1,66 @@
+---
+title: 웹으로 vscode를 이용하여 vi에서 벗어나기!
+date: 2026-03-10
+description: 서버 내에서 개발을 하기 위한 환경을 구성할 때 vi보다 편하게 코드나 데이터를 보기 위한 vscode server 설치
+tags:
+  - vscode
+  - vscode-server
+  - vscode-web
+  - vi
+  - code-server
+  - coder
+---
+## Code-server 설치를 위한 준비
+
+vscode는 우리가 일상적으로 사용하는 코드 편집기인데, 이를 웹을 통해서 서버에 설치하여 사용할 수 있다고 한다. 어느정도 플러그인을 지원하는진 모르겠으나 vi를 대체하기 위해서라도 좀 편하게 운용하기 위해 설치를 하고자 했다.\
+요즘 Antigravity와 같은 툴도 좋지만 codex, gemini cli, claude code와 같이 cli환경에서 개발을 대신해주는 AI 에이전트가 생각보다 많이 사용되고 있고 언제 어디서든 개발을 하기 위해 서버를 만들어두고 그 안에 ssh로 접속해서 개발하는 사람들이 늘어났다.
+
+이런 과정에서 vi에 익숙해진다면 매우 좋겠지만 여러개의 코드 파일을 보게될 때 하이라이팅이 되어있지 않거나 코드 수정 때 마다 lint라던지 기타 여러가지에 대한 불편함이 있어 이걸 해소하기 위해 vscode-server를 설치하여 사용해보려고 한다.
+
+
+
+사실 vscode-server랑 code-server랑은 좀 다르다. vscode-server는 내 데스크탑 앱에서 터널링을 통해 원격 서버에 접속하여 대신 vscode를 로컬처럼 사용하게 하는 기술이고, code-server는 coder라는 회사에서 개발한 웹 브라우저 기반의 오픈소스 vscode라고 생각하면 된다. 물론 터널을 뚫어놓고 vscode.dev를 통해 접속하는 것도 가능하겠지만 개인적으론 뭔가 뭔가라서 code-server로 대체하기로 하였다.
+
+## Code-server 설치
+
+:::info [https://github.com/coder/code-server](https://github.com/coder/code-server) :::
+
+우선 설치 자체는 간단하다 위 깃헙 링크에 들어가면 잘 설명되어있다.&#x20;
+
+```bash
+curl -fsSL https://code-server.dev/install.sh | sh
+```
+
+해당 명령어를 통해 설치하면 자동으로 손쉽게 설치가능하다. 매우 빠르게 설치가 된다.
+
+```
+ssh -N -L 8080:127.0.0.1:8080 [user]@<instance-ip>
+```
+
+ssh 터널링을 통해서 원격 서버의 8080 포트를 열어서 접속이 되는지 테스트해본다.
+
+## 외부 접속을 위한 변경
+
+reverse-proxy를 통해 접속을 하는 형태로 구성을 해 둔 상태인데, 127.0.0.1은 동작하지만 리버스프록시에 서버를 등록해도 정상적으로 접속되지 않아서 확인해 본 결과 config 파일을 수정해야한다.
+
+```bash
+// /home/user/.config/code-server/config.yaml
+
+bind-addr: 127.0.0.1:8080    -> 0.0.0.0:8080 으로변경
+auth: password
+password: {원하는 암호로 변경}
+cert: false
+```
+
+
+
+위 경로에 있는 파일을 수정하면 접속 세팅은 마무리된다. 암호는 내가 사용하는 암호로 변경해야 웹 서버로 접속이 가능해진다.
+
+## 단점
+
+
+
+* 속도가 약간 느린편이다. 사양이 좋으면 빨라질지 모르겠으나, 일단 사용하는데 속도가 느리다
+* ![](/images/vscode-vi/1.png)
+  * dot(.) 폴더가 가려지지 않는다. 물론 자율성을 위해서 필요할 수도 있지만 많은 사람들이 다 같이 사용하는 경우라면 분명 불편함은 있을 듯 싶다.
+* gemini 를 설치해서 사용해봤는데 느린편이다. 사용할 수 있단 점에 의의를 두는 정도 그냥 vi를 대체하는 용도 정도로 쓰는게 제일 좋아 보인다.
