@@ -110,6 +110,15 @@ sudo apt-get install redis-server redis-sentinel redis-tools
 
 모든 서버 다 위 명령어로 설치해준다. SERVER 3은 redis-sentinel만 실행한다 해도 실행에 관련한 설정파일 같은게 종속성이 있는 것으로 보인다. 셋 다 설치를 해주어야 에러가 나지 않는다.
 
+### – 인스턴스 포트 오픈하기
+
+oracle cloud에서는 ufw를 통해 포트 오픈하는게 오류가 있다는 말이 종종 있어 iptables를 이용해서 포트를 오픈하기로 한다.
+
+```bash
+sudo iptables -I INPUT 1 -p tcp --dport 6379 -j ACCEPT  # redis-server 포트
+sudo iptables -I INPUT 1 -p tcp --dport 26379 -j ACCEPT  # redis-sentinel 포트
+```
+
 ### – 각 서버별 세팅하기 (SERVER 1, 2)
 
 ```bash
@@ -150,6 +159,3 @@ sudo systemctl enable redis-sentinel
 ```
 
 SERVER 3은 서버는 사용하지 않으니 종료 및 disable 해준다.
-
-
-
