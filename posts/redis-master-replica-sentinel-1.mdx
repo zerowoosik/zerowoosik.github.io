@@ -1,0 +1,83 @@
+---
+title: Redis master-replica 및 sentinel 구성하기 - 1
+date: 2026-03-14
+description: Redis 서버를 master-replica 구조와 sentinel을 통한 HA를 구성하도록 한다.
+tags:
+  - OracleCloud
+  - Redis
+  - Redis_master-replica
+  - Redis_Sentinel
+  - 레디스
+---
+## 1. 서버 사양 및 구성 구상하기
+
+현재 사용하는 서버는 Oracle cloud를 그대로 이용하고 있다. OKE를 통해 쿠버네티스 환경을 구성하게 되면 문제는 ARM A1을 모두 사용하게 되어 사실상 Redis를 돌릴만한 사양의 무료 인스턴스를 모두 소모한 셈이 된다. 그래서 가능하다면 계정을 하나 더 만들어 Redis서버를 구축하기로 했다. 서로 다른 아이디(테넌시)인 경우 서버가 분리되지만 피어링을 통해서 연결하여 사용할 예정이다. 이 내용은 다음 포스팅에서 다룬다.
+
+공식 문서에 따르면 개발 환경에는 최소 1노드, 권장 2노드 이상 요구하고 있으며, 노드별 최소 4GB 이상의 램, 권장 10GB 이상의 램을 요구한다.(참조 : [Redis Docs](https://redis.io/docs/latest/operate/rs/installing-upgrading/install/plan-deployment/hardware-requirements/))&#x20;
+
+저기에 부합하는 가장 좋은 OCI 인스턴스는 ARM A1 2CPU 12GB RAM 사양을 선택하는것이 가장 최적의 조건이다. 두 개의 인스턴스를 만들어 Master-replica 구성을 두고, 1개의 AMD 1CPU 1GB RAM 인스턴스를 만들어 sentinel을 추가하면 무료 사양에서 가장 최적의 인스턴스를 만들 수 있다. 표로 나타내면 다음과 같다
+
+|                            | redis-server | redis-sentinel |
+| -------------------------- | ------------ | -------------- |
+| SERVER 1 : A1 2CPU 12GB    | Master       | O              |
+| SERVER 2 : A1 2CPU 12GB    | replica      | O              |
+| SERVER 3 : AMD 1 OCPU, 1GB | X            | O              |
+
+
+
+레디스 서버가 동작하지 않는 AMD 인스턴스는 단순 sentinel기능만 하게 하여 quroum의 수가 홀수개가 유지되도록 설정하는 목적이기에 실질적으로 큰 사양을 필요로 하지 않는다. 게다가 Redis는 공식적으로 ARM, X86 모두 지원하므로 구성에 큰 어려움도 없다.
+
+서비스를 구성하기 위해 인스턴스를 생성하자.
+
+
+
+## 2. 인스턴스 생성하기
+
+여느때와 같이 인스턴스는 위 사양대로 생성하면 된다. 다만, 레디스의 master-replica 구성 및 센티넬은 각자 다른 서버에서 구동되어야 한다. 보통 AWS에서 AZ(Availability Zone)으로 나누듯이 OCI에서도 나눠야 하는데 OCI의 용어는 AD(Availability Domain)이다. (출처 : [OCI Region & AD](https://docs.oracle.com/en-us/iaas/Content/General/Concepts/regions.htm))
+
+리스트에서 보듯 3개 이상의 AD를 가지고 있는 리전은 몇 개 없다. 그러면 서버를 어떻게 나눠야 할 것인가? 바로 FD(Fault Domains)를 이용하면 된다. 위 출처 설명에도 나와있지만 FD를 이용하면 물리적으로 인스턴스를 분리시켜 장애 발생점을 나누는 방법이라고 보면 된다.
+
+![](/images/redis-master-replica-sentinel-1/1.png)
+
+인스턴스를 생성할 때 `이미지 및 구성` 위에 `고급 옵션`을 누르면 아래 결함 도메인을 선택할 수 있다. 서버 1, 2, 3번에 각각 결함 도메인을 1,2,3으로 매칭해 줄 것이다.
+
+
+
+![](/images/redis-master-replica-sentinel-1/2.png)
+
+Oracle cloud는 어차피 200GB의 부트 볼륨을 제공해주고있다. Redis는 RDB, AOF를 이용한 영속성을 제공하기 위해 디스크도 사용하고 있기 때문에 가능하면 다 사용하는게 좋다. 어차피 3개 서버를 사용할 예정이고 인스턴스 하나당 최소 부트 볼륨은 50GB를 설정해야하니 Server1,2에는 75GB, Server3에는 50GB를 할당해준다.
+
+VPU가 늘어나면 비용이 부과될 수 있기 때문에 VPU를 늘리지 말고 볼륨 크기를 늘려서 처리량의 속도를 늘리는게 그나마 현명한 방법이다.
+
+
+
+![](/images/redis-master-replica-sentinel-1/3.png)
+
+![](/images/redis-master-replica-sentinel-1/4.png)
+
+추가적으로 추후에 혹시나 모를 상황에 대비하여 좀 더 빠르게 동일 환경을 추가하기 위해 이번엔 OCI에서 제공하는 terraform을 이용해본다. 설정을 모두 마치고 인스턴스 생성을 누르지 말고 `스택으로 저장` 을 눌러서 별 다른 수정없이 next를 눌러 설정을 완료하자. 마지막에 적용 실행만 진행하면 인스턴스가 생성되면서 스택에 terraform이 저장된다. terraform은 무료로 제공된다고 되어있으니 편하게 사용하면 될 듯 하다.
+
+
+
+![](/images/redis-master-replica-sentinel-1/5.png)
+
+생성된 스택의 패널에 보면 terraform 구성을 다운로드 받을 수 있다. Server 1과 동일한 서버를 만들 예정이니 해당 terraform을 다운로드 받아서 최소 다음 세 가지 요소를 수정하자
+
+```tf
+agent_config - create_vnic_details - display_name
+agent_config - display_name
+agent_config - fault_domain
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
