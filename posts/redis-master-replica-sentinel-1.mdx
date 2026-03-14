@@ -131,17 +131,13 @@ protected-mode no
 // 검색하면 내용이 나오니 그 부분 주석 해제 후 사용.
 ```
 
-
-
 SERVER 1은 우선 마스터로 설정하고, SERVER 2는 레플리카로 설정할 예정이니 SERVER 2에는 다음 옵션도 활성화 해야한다.
 
 ```
 replicaof <MASTER Internal IP> 6379
 ```
 
-
-
-
+replica로 사용할 서버는 해당 값을 넣어야 한다. SERVER 1 의 내부망 IP 를 넣으면 된다.
 
 ### – 각 서버별 세팅하기 (SERVER 3)
 
@@ -154,3 +150,6 @@ sudo systemctl enable redis-sentinel
 ```
 
 SERVER 3은 서버는 사용하지 않으니 종료 및 disable 해준다.
+
+
+
