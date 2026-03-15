@@ -17,13 +17,11 @@ vscode는 우리가 일상적으로 사용하는 코드 편집기인데, 이를 
 
 이런 과정에서 vi에 익숙해진다면 매우 좋겠지만 여러개의 코드 파일을 보게될 때 하이라이팅이 되어있지 않거나 코드 수정 때 마다 lint라던지 기타 여러가지에 대한 불편함이 있어 이걸 해소하기 위해 vscode-server를 설치하여 사용해보려고 한다.
 
-
-
 사실 vscode-server랑 code-server랑은 좀 다르다. vscode-server는 내 데스크탑 앱에서 터널링을 통해 원격 서버에 접속하여 대신 vscode를 로컬처럼 사용하게 하는 기술이고, code-server는 coder라는 회사에서 개발한 웹 브라우저 기반의 오픈소스 vscode라고 생각하면 된다. 물론 터널을 뚫어놓고 vscode.dev를 통해 접속하는 것도 가능하겠지만 개인적으론 뭔가 뭔가라서 code-server로 대체하기로 하였다.
 
 ## Code-server 설치
 
-:::info [https://github.com/coder/code-server](https://github.com/coder/code-server) :::
+:::info https\://github.com/coder/code-server :::
 
 우선 설치 자체는 간단하다 위 깃헙 링크에 들어가면 잘 설명되어있다.&#x20;
 
@@ -52,13 +50,9 @@ password: {원하는 암호로 변경}
 cert: false
 ```
 
-
-
 위 경로에 있는 파일을 수정하면 접속 세팅은 마무리된다. 암호는 내가 사용하는 암호로 변경해야 웹 서버로 접속이 가능해진다.
 
 ## 단점
-
-
 
 * 속도가 약간 느린편이다. 사양이 좋으면 빨라질지 모르겠으나, 일단 사용하는데 속도가 느리다
 * ![](/images/vscode-vi/1.png)
