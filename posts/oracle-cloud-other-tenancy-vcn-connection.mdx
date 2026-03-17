@@ -1,0 +1,170 @@
+---
+title: 오라클 클라우드 서로 다른 테넌시의 VCN 연결하기
+date: 2026-03-15
+description: 오라클 클라우드에서 서로 다른 테넌시의 vcn을 연결하여 서로 내부망처럼 사용하는 방법을 기술한다.
+tags:
+  - 오라클클라우드
+  - OracleCloud
+  - VCN
+  - VCN-Peering
+  - LPG
+---
+## 0. Oracle cloud의 다른 계정과 연결하는 방법
+
+오라클에서는 같은 리전, 다른 리전, 같은 테넌시, 다른 테넌시별로 VCN(가상 클라우드 네트워크)에 연결하는 기능을 지원한다. 연결해야 할 이유는 명확하다. 같은 회사 내에서도 부서에 따라 다른 계정을 만들어 따로 운영할 수도 있고, 하나의 아이디에서 여러 VCN을 만들어 부서나 팀별로 관리하는 관리포인트를 만들 수 있기 때문이다. 모든걸 root로 관리하는 것도 보안상 단점이 명확하기에 나눠서 관리하는게 일반적으로 정설에 가깝다.
+
+그렇다면, 그렇게 나눠 관리하고 VCN도 나눠뒀는데 내부적으로 서비스 연동이 필요한 경우 공인 IP를 통한 외부망 연결보다는 피어링을 통한 내부망 연결이 당연히 속도도 빠르고 보안에도 나름 이점이 있을 것이니 피어링을 통한 연결이 명확할 것이다.
+
+:::warning 다만, 연결하려는 VCN같은 CIDR이 달라야한다. 만약 A테넌시의 VCN CIDR이 10.0.0.0/16, B테넌시의 VCN CIDR이 10.1.0.0/16 이라면 서로 피어링하는 대역이 달라 문제가 없지만, 같은 10.0.0.0/16 이라면 당연히 대역의 충돌이 발생한다. 이 점은 설계시에 꼭 필요한 설정이다.:::
+
+[테넌시 간 지역 간 전용 접속 구성](https://docs.oracle.com/ko/solutions/xregion-pvt-connectivity-oci/index.html)
+
+[두 테넌트와 해당 동적 경로 지정 게이트웨이 간에 RPC 접속 설정](https://docs.oracle.com/ko/learn/oci-tenants-rpc/)
+
+[IAM Policies for Routing Between VCNs](https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/drg-iam.htm)
+
+공식 문서들이 제공되어 있고 여기서 필요한 부분만 취사 선택하여 각 다른 테넌시의 VCN을 연결하도록 한다. 개인적으로 사용하는 용도에 가까우니 따로 IAM 권한을 나누지 않고 root로 진행하였다.
+
+## 1. 서로 연결할 테넌시(계정) 요청자, 수락자 IAM 정책 설정
+
+우선 피어링에 가장 필요한 것은 IAM 을 통한 권한 설정이 필요하다. 오라클 공식 문서에서는 `요청자(Requestor)`와 `수락자(Acceptor)`를 선정하고 그 둘을 연결하도록 가이드를 제공하고 있다. 오라클 공식 문서의 `Local Peering using an LPG (VCNs in the Same Tenancy)` 를 참고하여 설정을 진행했다.\\
+
+* Requestor : OKE 서버를 구동하고 있는 테넌시
+* Acceptor : Redis 서버를 구동하고 있는 테넌시&#x20;
+
+설정은 이렇게 결정했다. 서비스는 OKE에서 돌아갈거고 Redis에 연결을 요청하는 방식이 좀 더 자연스러워 보인다고 생각된다. 어차피 통신은 양방향이 가능하기 때문에 대규모의 피어링이나 일종의 컨벤션이 필요한 규모가 아니라면 적절히 좋아 보이는게 낫다고 판단했다.
+
+### – 요청자 IAM 정책 설정
+
+우선 요청자 테넌시의 IAM 정책을 설정하기 위해서 몇몇 정보가 필요하다. 위 IAM 관련 오라클 문서의 [다른 테넌시 간 LPG 관련 내용](https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/drg-iam.htm#scenario_m__local-LPG-xten)을 참고하여 정책 정보를 가져오도록 한다.
+
+```
+Define tenancy Acceptor as <acceptorTenancyOcid>
+Define group requestorGrp as <requestorGroupOcid>
+Define compartment requestorComp as id <requestorCompartmentOcid>
+
+Allow group requestorGrp to manage local-peering-from in compartment requestorComp
+Endorse group requestorGrp to manage local-peering-to in tenancy Acceptor
+Endorse group requestorGrp to associate local-peering-gateways in compartment requestorComp
+   with local-peering-gateways in tenancy Acceptor
+```
+
+공식 문서에 따르면 위와 같은 정책 예시를 작성해두었다. 저 정책을 적용하기 위해 각각의 OCID가 필요하기 때문에 데이터들을 OCI 콘솔에서 수집하도록 한다.
+
+#### 요청자에 필요한 IAM 설정값 복사하기
+
+##### Acceptor, acceptorTenancyOcid
+
+수락자의 테넌시 OCID다. 내 상황으로 치면 현재 Redis 서버가 설치된 계정의 테넌시 OCID를 가져오면 된다.
+
+![](/images/oracle-cloud-other-tenancy-vcn-connection/1.png)
+
+Acceptor는 수락자의 테넌시 이름이기 때문에 테넌시 이름으로 치환해두고, 콘솔의 우측 상단 아이콘을 클릭한 뒤, 테넌시 : (계정 테넌시 이름)를 클릭하면 일반 정보에 OCID 내용이 있다 이걸 복사해두자.
+
+##### requestorGrp, requestorGroupOcid
+
+요청자의 계정 그룹 OCID이다.&#x20;
+
+![](/images/oracle-cloud-other-tenancy-vcn-connection/2.png)
+
+왼쪽 상단 메뉴바를 선택해서 ID & 보안 → ID → 도메인을 클릭한다. 대부분은 따로 설정한 도메인이 없고 Default가 있을 것이다. (만약 설정한 도메인이 있다면 해당 도메인을 선택하자)&#x20;
+
+![](/images/oracle-cloud-other-tenancy-vcn-connection/3.png)
+
+상단 사용자 관리를 선택하고 스크롤을 내리면 그룹이 있다. 해당 그룹의 Administrators를 클릭한 뒤 해당 페이지의 OCID 를 복사해두자. requestorGrp은 그냥 Administrators로 입력하면 된다.
+
+##### requestorComp, requestorCompartmentOcid
+
+![](/images/oracle-cloud-other-tenancy-vcn-connection/4.png)
+
+요청자의 컴파트먼트(구획) OCID이다. 상단 검색창에 구획이라고 검색 한 뒤 나오는 구획을 클릭하여 OCID 를 복사해 두면 된다.
+
+:::warning 별 다른 설정이 없다면 루트 구획을 기반으로 만들어졌을 것이다. 루트 구획에서 하위 구획을 만들어 VCN을 해당 하위구획으로 리소스 이동을 해두어야 한다. 루트 구획의 OCID는 테넌시의 OCID와 동일하기 떄문에 정책에 사용이 불가능하다. :::\\
+
+#### 요청자 IAM 정책 설정하기
+
+위에서 필요한 정보들을 모두 복사 완료했다면, 정책 예시에 해당 값들을 각각 붙여넣어 정책 코드를 완성해두자. (예시에서는 상세 내용 제거함)
+
+```
+Define tenancy <tenency-Name> as ocid1.tenancy.oc1.... ~~
+Define group Administrators as ocid1.group.oc1.... ~~
+Define compartment <comp-Name> as id ocid1.compartment.oc1.... ~~
+
+Allow group Administrators to manage local-peering-from in compartment <comp-Name>
+Endorse group Administrators to manage local-peering-to in tenancy <tenency-Name>
+Endorse group Administrators to associate local-peering-gateways in compartment <comp-Name> with local-peering-gateways in tenancy <tenency-Name>
+```
+
+![](/images/oracle-cloud-other-tenancy-vcn-connection/5.png)
+
+해당 내용을 토대로 IAM에서 정책을 설정해야한다. 좌측 상단 메뉴를 펼쳐 ID&보안 → ID → 정책을 들어가 정책 생성을 선택한다. 뜨는 창에서 원하는 이름을 입력하고, 정책 작성기 탭의 `수동 편집기 표시`를 눌러 위에 만들어 둔 정책 내용을 입력해준 뒤 저장한다.
+
+##### Trouble Shooting
+
+```
+Define compartment requestorComp as id <requestorCompartmentOcid>
+```
+
+이 값에서 id는 빼줘야 한다. 계속 오류가 나서 직접 해보니 빼주는게 맞다.
+
+(이 정책이 정상적으로 동작하지 않아서 이거저거 하느라 굉장히 오래걸렸다. 조금 화가 날 정도로.)
+
+#### 수락자 IAM 정책 설정하기
+
+```
+Define tenancy Requestor as <requestorTenancyOcid>
+Define group requestorGrp as <requestorGroupOcid>
+Define compartment acceptorComp as id <acceptorCompartmentOcid>
+
+Admit group requestorGrp of tenancy Requestor to manage local-peering-to in compartment acceptorComp
+Admit group requestorGrp of tenancy Requestor to associate local-peering-gateways in tenancy Requestor with local-peering-gateways in compartment acceptorComp
+```
+
+동일하게 요청자 처럼 이용해서 만들어준다. 그리고 수락자 테넌시에도 IAM 정책을 만들어준다.
+
+## 2. 상대 포트 Ingress 등록
+
+Requestor, Acceptor 를 선정하고 IAM 정책을 등록한 뒤 서로 연결될 수 있도록 네트워크 구역을 열어주어야 한다. 요청자에서는 수락자의 VCN에 접속이 가능해야하고, 수락자는 요청자의 VCN에 접속이 되어야 서로 내부망처럼 연결이 될 수 있다는 점이다. 내 시점 서비스는 다음과 같다.
+
+|           | VCN CIDR    | 오픈해야 하는 CIDR    |
+| --------- | ----------- | --------------- |
+| Requestor | 10.0.0.0/16 | **10.1.0.0/16** |
+| Acceptor  | 10.1.0.0/16 | **10.0.0.0/16** |
+
+서로 상대방의 CIDR를 흔히 말하는 인바운드 오픈해줘야 내부망이어도 서로 접속이 가능할 것이다. \
+\
+![](/images/oracle-cloud-other-tenancy-vcn-connection/7.png)
+
+좌측 상단 탭 - 네트워킹 - 가상 클라우드 네트워크를 클릭하여 들어가면 내가 사용/연결 하고자 하는 VCN을 들어간다. 상단 보안을 클릭하면 첫 번째 보안 목록에 사용하는 보안 목록이 뜨는데 내가 사용하는 보안 목록을 들어가준다. (만약 보이지 않으면 컴파트먼트를 다른것으로 변경하면 된다. OKE가 만들어졌다면 보안 목록이 3개가 나오는데 nodesec을 선택하자)
+
+사용하는 보안 목록으로 들어가면 상단에 보안 규칙을 클릭해준다. 그럼 수신 규칙에 `수신 규칙 추가`를 선택한 뒤 각자가 오픈해야 하는 CIDR을 입력 후 포트 범위는 소스 및 대상포트 모두 빈 칸으로 두고 저장한다. 요청자 수신자 모두 등록해주자.
+
+## 3. LPG(Local Peering Gateway) 생성 및 피어링&#x20;
+
+피어링을 진행하기 위해 양 쪽 모두 피어링을 생성해줘야 한다. 가상 네트워크 - 사용 VCN - (상단) 게이트웨이를 클릭한 뒤 스크롤을 내리면 로컬 피어링 게이트웨이가 나온다. 피어링 게이트웨이 생성을 눌러 이름을 입력해주자. 컴파트먼트는 root로 만들어야 한다. 요청자 수신자 모두 일단은 생성.
+
+![](/images/oracle-cloud-other-tenancy-vcn-connection/8.png)
+
+생성이 완료되면 수신자의 LPG 목록 오른쪽 점 세개를 눌러 OCID를 복사한 뒤, 요청자의 LPG 메뉴에서 피어링 접속 설정을 눌러준다. 그리고 `로컬 피어링 게이트웨이 OCID 입력`을 선택하고 복사한 수신자의 OCID를 입력해준다. 웬만한 문제가 없다면 피어링 연결이 될 것이다.
+
+## 4. 라우팅 규칙 추가하기
+
+게이트웨이를 생성했으니 해당 게이트웨이로 들어오는 트래픽을 제어할 수 있도록 라우팅 규칙이 추가되어야 한다. VCN 상세 상단 경로지정 - 사용하는 경로 테이블 클릭 - 상단 경로규칙을 클릭한다. `경로 규칙 추가`를 눌러서 LPG를 추가해 줄 것이다.
+
+* 대상 유형 : 로컬 피어링 게이트웨이
+* 대상 CIDR 블록 : 상대 CIDR 대역
+* 대상 로컬 피어링 게이트웨이 : 만들어 준 피어링 선택 (따로 작업안했다면 보통 1개)
+
+위 내용을 입력 후 경로 규칙 추가를 통해 저장해주자.
+
+## 5. 마무리
+
+피어링이 완료되었다면, 가지고있는 VM을 통해서 상대 CIDR에 ping이나 서비스 연결을 해 보면된다. 나 같은 경우는 간단하게 VM 하나 만들어서 다른 설정없이 cloud shell을 이용하여 접속하였다.
+
+
+
+![](/images/oracle-cloud-other-tenancy-vcn-connection/9.png)
+
+
+
+간단히 상대 내부망의 redis에 접속해보니 잘 접속하는 것을 알 수 있다. cloud shell을 사용하려면 네트워크를 VCN의 임시 네트워크로 변경해서 사용해야한다. 접속이 성공한다면 LPG를 통한 다른 테넌시에 접속 세팅이 완료된 것이다.
