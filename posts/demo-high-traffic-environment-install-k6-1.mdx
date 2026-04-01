@@ -1,0 +1,100 @@
+---
+title: '데모 대용량 트래픽을 위한 환경구성하기 - 1 : K6 설치'
+date: 2026-04-01
+description: 대용량 트래픽 상태를 구현하기 위한 환경을 구성한다. 부하 테스트 애플리케이션인 K6를 설치한다.
+tags:
+  - k6
+  - 부하테스트도구
+  - 테스트
+  - 대용량
+  - 대용량트래픽
+---
+## 1. 부하테스트 도구 K6 설치하기
+
+K6는 로컬에서 테스트하는 jmeter같은 부하 테스트 도구 중 하나이다. javascript기반으로 시나리오를 작성해서 테스트 할 수 있도록 개발된 애플리케이션으로 Grafana labs에서 개발한 도구로 Grafana와 매우 호환성이 좋은것이 특징이다. k6로 테스트 한 결과를 prometheus를 통해 결과를 저장하고 grafana로 모니터링 할 수 있도록 환경을 구성한다.
+
+[install k6](https://grafana.com/docs/k6/latest/set-up/install-k6/)
+
+위 링크를 통해 설치 방법을 확인할 수 있다.
+
+
+
+```
+sudo gpg -k
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+sudo apt-get update
+sudo apt-get install k6
+```
+
+oracle cloud에서 ubuntu (debian계열)를 사용하는 입장에서는 위 방식을 그대로 다운로드 받으면 되겠지만, 문제는 arm64인 서버는 "https\://dl.k6.io/deb"에서 arm64 아키텍쳐에 대한 지원이 되지 않는 것이 문제일 것이다. 결국 OC를 사용하는 사용자들은 따로 직접 수동설치를 해 주어야 한다.
+
+[Grafana k6](https://github.com/grafana/k6/) 깃허브 에 들어가면 release 버전별로 업로드 되어있고 arm64버전을 지원하는 패키지가 있다. 해당 패키지의 다운로드 파일 url을 복사해서 다음과 같이 명령어를 입력한다.
+
+
+
+```
+curl -L https://github.com/grafana/k6/releases/download/v1.7.1/k6-v1.7.1-linux-arm64.tar.gz -o k6.tar.gz
+tar -xvf ./k6.tar.gz
+
+sudo mv ./k6-v1.7.1-linux-arm64/k6 /usr/local/bin/  ; 폴더는 버전별로 맞춰서 이동
+
+k6 version   ; 버전 확인
+```
+
+바이너리 파일을 bin폴더까지 옮기면 버전 확인이 되면 설치가 완료된다.
+
+
+
+## 2. 간단한 테스트로 정상 동작 확인하기
+
+[공식 사이트](https://grafana.com/docs/k6/latest/using-k6/) 에 테스트 관련 내용이 많이 작성되어있다. 이걸 참고하면 여러 시나리오를 구상하고 테스트를 할 수 있는데 일단 설치해 둔 상태이니 간단한 요청 후 정상적으로 동작하는지 테스트만 진행하도록 한다.&#x20;
+
+테스트 하는 서버는 grafana에서 제공하는 [Quickpizza](https://quickpizza.grafana.com/) 라는 사이트이다. 들어가 보면 별 대단한 건 없고 pizza를 만들어달라고 요청할 수 있는 간단한 사이트인데 여기로 POST 요청하여 데이터가 정상적으로 받아지는지만 테스트 해 보면 된다.
+
+
+
+```
+import http from 'k6/http';
+import { sleep } from 'k6';
+
+export default function () {
+  const url = 'https://quickpizza.grafana.com/api/pizza';
+  const data = {
+    maxCaloriesPerSlice: 1000,
+    mustBeVegetarian: false,
+    excludedIngredients: [],
+    excludedTools: [],
+    maxNumberOfToppings: 5,
+    minNumberOfToppings: 2,
+    customName: "",
+  };
+
+  const params = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+  http.post(url, JSON.stringify(data), params);
+
+  sleep(1);
+}
+```
+
+
+
+간단한 폴더를 만든 다음 위 코드를 script.js로 저장한다. 그리고 k6 run script.js 를 실행하면 post 요청을 직접 하며 실행에 대한 결과가 나오게된다. 정상적으로 설치가 되었다면 해당 코드 실행에 문제가 없을 것이다.
+
+
+
+
+
+
+
+
+
+
+
+
+
+&#x20;\
