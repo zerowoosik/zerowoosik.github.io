@@ -1,0 +1,117 @@
+---
+title: '데모 대용량 트래픽을 위한 환경구성하기 - 2 : 프로메테우스, Grafana 설치'
+date: 2026-04-01
+description: 'k6 테스팅 데이터 저장을 위한 prometheus를 설치하여 grafana와 연동한다. '
+tags:
+  - prometheus
+  - 프로메테우스
+  - 테스팅도구
+  - 부하테스트
+  - 모니터링
+  - Grafana
+---
+:::info prometheus는 시계열 데이터를 수집하여 저장하는 일종의 데이터베이스라고 볼 수 있다. k6로 진행한 테스팅을 시간에 따른 데이터로 저장하고 그 데이터를 grafana 대시보드를 통해 보여주기 위한 데이터 베이스라 생각하면 편하다. :::
+
+## - Prometheus 설치하기
+
+[공식 홈페이지 설치 문서](https://prometheus.io/docs/prometheus/latest/installation/) 를 확인해보면 바이너리도 제공하고 있지만 docker를 통한 설치 내용이 좀 더 상세하게 나와있고, 어차피 데모형식으로 사용할 예정이니 굳이 바이너리 설치보다는 docker를 통한 설치를 하기로 결정했다.
+
+공식 홈페이지 문서에서 `prometheus.yml` 파일을 기반으로 볼륨 & 바인드 마운트를 하라고 되어있다. `prometheus.yml` 파일은 prometheus의 홈페이지 github를 들어가서 검색해보면 파일이 있다. 필요에 따라 가공해서 사용하면 된다. [(github 링크)](https://github.com/prometheus/prometheus/blob/main/documentation/examples/prometheus.yml)
+
+
+
+```
+//prometheus.yml
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+        labels:
+          app: "prometheus"
+```
+
+
+
+alerting이나 rule 관련된 파일을 작성한 건 아무것도 없기 때문에 `evaluation_interval` 은 삭제하고, 빈칸인 것 또한 모두 삭제했다. docker로 prometheus와 grafana 모두 구동할 예정이라 localhost 대신 http\://prometheus:9090 을 사용한다. 대신 docker run을 할 때 옵션을 더 추가해주어야 한다.
+
+```
+sudo docker network create monitoring-network
+sudo docker volume create prometheus-data
+
+sudo docker run -d \
+    --name prometheus \
+    --network monitoring-network \
+    -p 9090:9090 \
+    -v ./prometheus.yml:/etc/prometheus/prometheus.yml \
+    -v prometheus-data:/prometheus \
+    prom/prometheus
+```
+
+
+
+컨테이너만 딸랑 만들어버리면 컨테이너가 삭제되면 데이터가 유실되기 때문에 volume도 만들어서 데이터가 유실되지 않도록 해 주어야 한다. docker에 정상적으로 들어갔다면 http\://\{prometheus IP}:9090을 접속해 본다. 웹 대시보드가 뜨면 성공이다.
+
+
+
+:::info Prometheus는 시계열 데이터를 수집하는 데이터베이스라면 Grafana는 시계열 메트릭 데이터를 보여주는 오픈소스 대시보드다. :::
+
+## – Grafana 설치하기
+
+
+
+Grafana는 바이너리 설치 방법도 메우 상세하게 제공하긴 하지만 prometheus를 도커에 설치했으니 동일하게 도커에 설치하도록 한다. 게다가 네트워크 구성도 해 두었기 때문에 네트워크를 엮어두면 편하게 사용할 수 있다는 장점도 있다. [(docker 설치 링크)](https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/)
+
+
+
+```
+docker volume create grafana-storage
+
+docker run -d -p 3000:3000 --name=grafana \
+  --volume grafana-storage:/var/lib/grafana \
+  --network monitoring-network \ 
+  grafana/grafana-enterprise
+```
+
+
+
+해당 명령어 입력시 grafana의 볼륨 생성 후 데이터가 유실되지 않도록 구동할 수 있다. 우리는 따로 플러그인을 하려는 게 아니기 때문에 문제없이 구동 가능하다. docker run이 완료되면 http\://\{grafana IP}:3000을 접속한다. 웹 대시보드가 뜨면 성공이다.
+
+![](/images/demo-high-traffic-environment-install-prometheus-2/1.png)
+
+
+
+웹 대시보드는 admin/admin으로 로그인 할 수 있다. 처음 로그인을 하면 비밀번호를 변경하라는 문구가 나오니 적당히 변경하면 된다.
+
+
+
+– Grafana에 Prometheus 연동하기
+
+
+
+![](/images/demo-high-traffic-environment-install-prometheus-2/2.png)![](/images/demo-high-traffic-environment-install-prometheus-2/3.png)
+
+![](/images/demo-high-traffic-environment-install-prometheus-2/4.png)
+
+왼쪽 메뉴 Connections - View configured data sources - prometheus 를 선택하면 입력할 수 있는 페이지가 나온다. 거기서 Connection URL에 다음과 같이 입력한다.
+
+![](/images/demo-high-traffic-environment-install-prometheus-2/5.png)
+
+`http://prometheus:9090`
+
+
+
+docker 네트워크를 같은 네트워크로 설정했다면 문제없이 설정이 된다.
+
+
+
+![](/images/demo-high-traffic-environment-install-prometheus-2/6.png)
+
+
+
+하단의 `save & test` 버튼을 누르면 정상적으로 성공했다는 메시지가 노출된다. 해당 메시지까지 확인했다면 Prometheus와 Grafana 연동이 완료되었다.
+
+
+
